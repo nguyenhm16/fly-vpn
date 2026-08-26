@@ -33,8 +33,10 @@ from flyexit.fly_ops import (
 from flyexit.tailscale import (
     check_tailscale,
     connect_exit_node,
+    current_tailnet,
     disconnect_exit_node,
     get_device_id,
+    switch_tailnet,
     wait_for_exit_node,
 )
 
@@ -59,6 +61,7 @@ class PreflightStatus(Enum):
 
     OK = auto()
     TAILSCALE_MISSING = auto()
+    TAILNET_SWITCH_FAILED = auto()
     AUTH_FAILED = auto()
     APP_FAILED = auto()
 
@@ -87,6 +90,7 @@ class PreflightResult:
     username: str = ""
     app_name: str = ""
     app_status: AppStatus = field(default=AppStatus.FAILED)
+    switched_tailnet: str = ""
     error: str = ""
 
 
@@ -108,11 +112,14 @@ class VPNSession:
         ts_auth_key: str = "",
         ts_api_key: str = "",
         ts_login_server: str = "",
+        ts_tailnet: str = "",
     ) -> None:
         self.process: subprocess.Popen[str] | None = None
         self.app_name: str | None = None
         self._ts_auth_key = ts_auth_key
         self._ts_login_server = ts_login_server
+        self._ts_tailnet = ts_tailnet
+        self._prior_tailnet: str | None = None
 
         # SaaS-only: API client for auth-key generation & device cleanup.
         if ts_api_key and not ts_login_server:
@@ -165,10 +172,33 @@ class VPNSession:
                 ),
             )
 
+        # 1b. Multi-tailnet Macs: make sure the local client is on the
+        # tailnet this session is configured for before touching it further.
+        switched_tailnet = ""
+        if self._ts_tailnet:
+            self._prior_tailnet = current_tailnet()
+            ok, err = switch_tailnet(self._ts_tailnet)
+            if not ok:
+                return PreflightResult(
+                    status=PreflightStatus.TAILNET_SWITCH_FAILED,
+                    error=(
+                        f"Failed to switch to Tailscale tailnet"
+                        f" [bold]{self._ts_tailnet}[/]: {err}\n"
+                        "Make sure you're logged into that account locally"
+                        " ([bold]tailscale switch --list[/]),"
+                        " or run [bold]tailscale login[/]."
+                    ),
+                )
+            switched_tailnet = self._ts_tailnet
+
         # 2. Fly.io authentication.
         auth_status, org_slug = check_auth()
         if auth_status is AuthStatus.NOT_AUTHENTICATED:
-            return PreflightResult(status=PreflightStatus.AUTH_FAILED, error=org_slug)
+            return PreflightResult(
+                status=PreflightStatus.AUTH_FAILED,
+                switched_tailnet=switched_tailnet,
+                error=org_slug,
+            )
 
         # 3. SaaS + API client → ensure ACL is ready (idempotent).
         if self._client is not None:
@@ -182,6 +212,7 @@ class VPNSession:
             return PreflightResult(
                 status=PreflightStatus.APP_FAILED,
                 username=org_slug,
+                switched_tailnet=switched_tailnet,
                 error=err,
             )
 
@@ -190,6 +221,7 @@ class VPNSession:
             username=org_slug,
             app_name=app_name,
             app_status=app_status,
+            switched_tailnet=switched_tailnet,
         )
 
     def launch(
@@ -290,6 +322,14 @@ class VPNSession:
             return ConnectStatus.CONNECTED
         return ConnectStatus.FAILED
 
+    def _restore_tailnet(self) -> None:
+        """Switch the local client back to whatever tailnet was active
+        before preflight() switched it. No-op if we never switched."""
+        if self._prior_tailnet is None:
+            return
+        switch_tailnet(self._prior_tailnet)
+        self._prior_tailnet = None
+
     def emergency_cleanup(self) -> None:
         """Kill process & destroy app synchronously.
 
@@ -308,6 +348,7 @@ class VPNSession:
                 if device_id:
                     self._client.delete_device(device_id)
             self.app_name = None
+        self._restore_tailnet()
 
     def teardown(self) -> tuple[str | None, bool]:
         """Disconnect TS → kill process → destroy app (force).
@@ -322,6 +363,7 @@ class VPNSession:
 
         app_name = self.app_name
         if not app_name:
+            self._restore_tailnet()
             return None, True
 
         ok = destroy_app(app_name)
@@ -332,4 +374,5 @@ class VPNSession:
             if device_id:
                 self._client.delete_device(device_id)
 
+        self._restore_tailnet()
         return app_name, ok

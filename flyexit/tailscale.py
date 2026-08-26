@@ -82,6 +82,49 @@ def wait_for_exit_node(
     return False
 
 
+def current_tailnet() -> str | None:
+    """Return the name of the currently active Tailscale tailnet, or None."""
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError):  # fmt: skip
+        return None
+    tailnet = data.get("CurrentTailnet") or {}
+    name: str | None = tailnet.get("Name")
+    return name
+
+
+def switch_tailnet(target: str) -> tuple[bool, str]:
+    """Switch the local Tailscale client to a different logged-in account.
+
+    *target* may be a tailnet name, account name, or profile ID -- anything
+    ``tailscale switch`` itself accepts. Switching to the already-active
+    account is a safe no-op. Returns ``(ok, error)``.
+    """
+    try:
+        result = subprocess.run(
+            ["tailscale", "switch", target],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    if result.returncode != 0:
+        return False, (result.stderr or result.stdout).strip()
+    return True, ""
+
+
 def get_device_id(hostname: str = TS_EXIT_HOSTNAME) -> str | None:
     """Find the Tailscale device ID by hostname via ``tailscale status --json``."""
     try:

@@ -48,6 +48,13 @@ _FIELDS: list[dict[str, str]] = [
         "url": "https://login.tailscale.com/admin/settings/authkeys",
         "hint": "tailscale.com/admin/settings/authkeys",
     },
+    {
+        "id": "ts_tailnet",
+        "label": "Tailscale tailnet  (Macs signed into multiple accounts)",
+        "placeholder": "cromulent or you@example.com — blank = don't switch",
+        "url": "",
+        "hint": "tailscale switch --list",
+    },
 ]
 
 
@@ -118,15 +125,10 @@ class SettingsScreen(ModalScreen[bool]):
                     yield Input(
                         value=saved,
                         placeholder=field["placeholder"],
-                        password=True,
+                        password=fid != "ts_tailnet",
                         id=f"input-{fid}",
                     )
-                    if _HEADLESS:
-                        yield Static(
-                            f"[dim]{field['hint']}[/]",
-                            classes="url-hint",
-                        )
-                    else:
+                    if field["url"] and not _HEADLESS:
                         with Horizontal(classes="url-row"):
                             yield Static(
                                 f"[dim]{field['hint']}[/]",
@@ -144,6 +146,11 @@ class SettingsScreen(ModalScreen[bool]):
                                 classes="btn-url",
                                 id=f"btn-open-{fid}",
                             )
+                    elif field["hint"]:
+                        yield Static(
+                            f"[dim]{field['hint']}[/]",
+                            classes="url-hint",
+                        )
 
             if _HEADLESS:
                 yield Static(

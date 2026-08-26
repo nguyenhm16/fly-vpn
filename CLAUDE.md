@@ -62,6 +62,8 @@ Two Tailscale auth paths coexist in `VPNSession.__init__`: an explicit `ts_auth_
 
 `emergency_cleanup()` must stay synchronous and exception-free — it runs from signal handlers and `atexit`, outside the Textual event loop.
 
+For Macs signed into multiple Tailscale accounts, an optional `ts_tailnet` setting makes `preflight()` run `tailscale switch` to the configured tailnet before touching anything else — this only affects the local CLI's active account (independent of `ts_api_key`, which is already bound to one tailnet regardless of local switch state). `teardown()`/`emergency_cleanup()` switch back to whatever was active beforehand via `VPNSession._prior_tailnet`.
+
 ### Fly.io integration
 
 `fly_api.py` is the only module that speaks HTTP to Fly's Machines API. `fly_ops.py` wraps it with domain operations (`check_auth`, `ensure_app_exists`, `destroy_app`, `cleanup_app_sync`). `ensure_app_exists` unconditionally deletes any existing app with the same name before creating fresh, then retries creation up to 10 times on "already taken" errors to absorb Fly's post-deletion name-propagation lag — this pattern exists because of a known race, don't remove the retry loop without understanding why (see `tests/test_ensure_app_exists.py`).

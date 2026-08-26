@@ -57,10 +57,12 @@ def _build_session() -> VPNSession:
     ts_auth_key = keystore.get("ts_auth_key") or os.environ.get("TAILSCALE_AUTHKEY", "")
     ts_api_key = keystore.get("ts_api_key") or os.environ.get("TAILSCALE_API_KEY", "")
     ts_login_server = os.environ.get("TS_LOGIN_SERVER", "")
+    ts_tailnet = keystore.get("ts_tailnet") or os.environ.get("TAILSCALE_TAILNET", "")
     return VPNSession(
         ts_auth_key=ts_auth_key,
         ts_api_key=ts_api_key,
         ts_login_server=ts_login_server,
+        ts_tailnet=ts_tailnet,
     )
 
 
@@ -344,6 +346,12 @@ class FlyVPNApp(App[None]):
             org = self._cfg.get("org", DEFAULT_ORG)
 
             pf = self._session.preflight(app_name, org)
+            if pf.switched_tailnet:
+                self.call_from_thread(
+                    self._log,
+                    f"[dim]🔀 Switched to Tailscale tailnet"
+                    f" [bold]{pf.switched_tailnet}[/bold][/]",
+                )
             if pf.username:
                 self.call_from_thread(
                     self._log, f"[dim]Authenticated as {pf.username}[/]"
