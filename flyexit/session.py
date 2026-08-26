@@ -170,11 +170,6 @@ class VPNSession:
         if auth_status is AuthStatus.NOT_AUTHENTICATED:
             return PreflightResult(status=PreflightStatus.AUTH_FAILED, error=org_slug)
 
-        # App names are globally unique on Fly.io — derive one from the user's
-        # org slug so different users of this open-source app don't collide.
-        if org_slug and app_name == "fly-vpn-node":
-            app_name = f"fly-vpn-{org_slug}"
-
         # 3. SaaS + API client → ensure ACL is ready (idempotent).
         if self._client is not None:
             from flyexit.acl_setup import setup_acl
