@@ -7,7 +7,7 @@ import sys
 
 from flyexit import config
 from flyexit.constants import DEFAULT_APP_NAME
-from flyexit.fly_ops import app_exists, destroy_app, kill_all_machines
+from flyexit.fly_ops import app_exists, destroy_app
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,10 +32,6 @@ def run_watchdog() -> None:
         "App '%s' found! Cleaning up to prevent charges…",
         app_name,
     )
-
-    killed = kill_all_machines(app_name)
-    if killed:
-        log.info("Killed %d running machine(s)", killed)
 
     if destroy_app(app_name):
         log.info("App '%s' destroyed successfully. 🗑  No charges.", app_name)

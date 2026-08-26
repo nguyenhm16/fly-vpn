@@ -357,6 +357,7 @@ class FlyVPNApp(App[None]):
                 return
 
             app_name = pf.app_name or app_name
+            self._cfg["app_name"] = app_name
             self.call_from_thread(
                 self._log, f"[dim]App [bold]{app_name}[/bold] ready ✅[/]"
             )
