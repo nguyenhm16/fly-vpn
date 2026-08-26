@@ -48,15 +48,15 @@ from flyexit.styles import APP_CSS
 
 
 def _build_session() -> VPNSession:
-    """Construct a VPNSession using keystore + env-var overrides."""
-    ts_auth_key = (
-        os.environ.get("TAILSCALE_AUTHKEY")
-        or keystore.get("ts_auth_key")
-    )
-    ts_api_key = (
-        os.environ.get("TAILSCALE_API_KEY")
-        or keystore.get("ts_api_key")
-    )
+    """Construct a VPNSession using keystore + env-var fallbacks.
+
+    Keystore (Settings UI) wins when both are set, matching
+    ``fly_api.resolve_token()``'s precedence for the Fly token — otherwise
+    a leftover ``.env``/env-var value would silently override any fix made
+    in the Settings screen.
+    """
+    ts_auth_key = keystore.get("ts_auth_key") or os.environ.get("TAILSCALE_AUTHKEY", "")
+    ts_api_key = keystore.get("ts_api_key") or os.environ.get("TAILSCALE_API_KEY", "")
     ts_login_server = os.environ.get("TS_LOGIN_SERVER", "")
     return VPNSession(
         ts_auth_key=ts_auth_key,
