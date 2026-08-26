@@ -8,7 +8,6 @@ The app only reads structured results and formats them for display.
 from __future__ import annotations
 
 import atexit
-import contextlib
 import os
 import signal
 from typing import ClassVar
@@ -226,8 +225,15 @@ class FlyVPNApp(App[None]):
         if self._session.is_active:
             self._set_status("⏳ Cleaning up before exit…")
             self._log("[dim]🧹 Cleaning up before exit…[/]")
-        self._teardown_with_log()
-        super().action_quit()
+        self._run_quit_teardown()
+
+    @work(thread=True)
+    def _run_quit_teardown(self) -> None:
+        try:
+            app_name, ok = self._session.teardown()
+            self._log_teardown(app_name, ok)
+        finally:
+            self.exit()
 
     def _on_settings_closed(self, saved: bool) -> None:
         """Re-initialise the session if keys were updated."""
@@ -407,7 +413,7 @@ class FlyVPNApp(App[None]):
             self._log_launch_error(result)
             self.call_from_thread(self._log, "[dim]🧹 Cleaning up remote resources…[/]")
             app_d, ok = self._session.teardown()
-            self._log_teardown(app_d, ok, from_thread=True)
+            self._log_teardown(app_d, ok)
         finally:
             self._launching = False
             if not self._session.is_active:
@@ -479,7 +485,7 @@ class FlyVPNApp(App[None]):
         try:
             app_name, ok = self._session.teardown()
             self.call_from_thread(self._log, "[dim]🔌 Disconnected from exit node[/]")
-            self._log_teardown(app_name, ok, from_thread=True)
+            self._log_teardown(app_name, ok)
             if ok and app_name:
                 if self._session._client is not None:
                     self.call_from_thread(
@@ -516,10 +522,6 @@ class FlyVPNApp(App[None]):
                     self._set_status, "⚠️ Stop failed; tunnel still running"
                 )
 
-    def _teardown_with_log(self) -> None:
-        app_name, ok = self._session.teardown()
-        self._log_teardown(app_name, ok, from_thread=False)
-
     def _log_launch_error(self, result: LaunchResult) -> None:
         if result.status is LaunchStatus.ERROR:
             self.call_from_thread(self._log, f"[bold red]❌ Error: {result.error}[/]")
@@ -531,9 +533,7 @@ class FlyVPNApp(App[None]):
             if result.hint:
                 self.call_from_thread(self._log, result.hint)
 
-    def _log_teardown(
-        self, app_name: str | None, ok: bool, *, from_thread: bool
-    ) -> None:
+    def _log_teardown(self, app_name: str | None, ok: bool) -> None:
         if not app_name:
             return
         msg = (
@@ -541,8 +541,4 @@ class FlyVPNApp(App[None]):
             if ok
             else f"[yellow]⚠  Could not delete app {app_name}[/]"
         )
-        if from_thread:
-            self.call_from_thread(self._log, msg)
-        else:
-            with contextlib.suppress(Exception):
-                self._log(msg)
+        self.call_from_thread(self._log, msg)
