@@ -51,7 +51,7 @@ _FIELDS: list[dict[str, str]] = [
     {
         "id": "ts_tailnet",
         "label": "Tailscale tailnet  (Macs signed into multiple accounts)",
-        "placeholder": "cromulent or you@example.com — blank = don't switch",
+        "placeholder": "your-tailnet or you@example.com — blank = don't switch",
         "url": "",
         "hint": "tailscale switch --list",
     },
