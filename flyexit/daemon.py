@@ -27,14 +27,39 @@ def _log_path() -> Path:
     return Path.home() / "Library" / "Logs" / "fly-vpn-daemon.log"
 
 
-def install_daemon() -> None:
-    """Write and load a launchd agent that runs `fly-vpn --web` in the background."""
+def _web_command() -> tuple[list[str], Path]:
+    """Return (ProgramArguments, WorkingDirectory) for the launchd job.
+
+    Prefers the standalone `fly-vpn` tool on PATH (installed via
+    `uv tool install`, independent of any repo checkout). Falls back to
+    `uv run --project <repo>` for dev checkouts that haven't installed it
+    as a tool.
+    """
+    fly_vpn = shutil.which("fly-vpn")
+    if fly_vpn:
+        return [fly_vpn, "--web"], Path.home()
+
     uv_path = shutil.which("uv")
     if uv_path is None:
-        print(
-            "Could not find the 'uv' command on PATH. Install it from "
+        msg = (
+            "Could not find 'fly-vpn' or 'uv' on PATH. Install uv from "
             "https://docs.astral.sh/uv/ and try again."
         )
+        raise RuntimeError(msg)
+
+    repo_root = _repo_root()
+    return (
+        [uv_path, "run", "--project", str(repo_root), "fly-vpn", "--web"],
+        repo_root,
+    )
+
+
+def install_daemon() -> None:
+    """Write and load a launchd agent that runs `fly-vpn --web` in the background."""
+    try:
+        program_arguments, working_directory = _web_command()
+    except RuntimeError as exc:
+        print(exc)
         return
 
     log_path = _log_path()
@@ -42,15 +67,8 @@ def install_daemon() -> None:
 
     plist = {
         "Label": _LABEL,
-        "ProgramArguments": [
-            uv_path,
-            "run",
-            "--project",
-            str(_repo_root()),
-            "fly-vpn",
-            "--web",
-        ],
-        "WorkingDirectory": str(_repo_root()),
+        "ProgramArguments": program_arguments,
+        "WorkingDirectory": str(working_directory),
         "RunAtLoad": True,
         "KeepAlive": True,
         "StandardOutPath": str(log_path),

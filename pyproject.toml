@@ -19,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-fly-vpn = "main:main"
+fly-vpn = "flyexit.cli:main"
 
 [build-system]
 requires = ["hatchling"]

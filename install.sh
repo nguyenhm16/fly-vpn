@@ -46,7 +46,7 @@ fi
 
 # ── .env setup ──────────────────────────────────────────────
 
-ENV_FILE="$REPO_DIR/.env"
+ENV_FILE="$HOME/.fly_vpn.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then
     echo ""
@@ -214,21 +214,19 @@ else
     ok "Fly.io authenticated as $FLY_USER"
 fi
 
-# ── resolve python & venv ───────────────────────────────────
+# ── install as a standalone tool ────────────────────────────
 
-info "Syncing dependencies…"
-(cd "$REPO_DIR" && uv sync --quiet)
+info "Installing fly-vpn as a standalone tool…"
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install --force "$REPO_DIR"
 
-# Resolve the fly-vpn entry-point that uv created
-VENV_BIN="$REPO_DIR/.venv/bin"
-FLY_VPN_BIN="$VENV_BIN/fly-vpn"
-
-if [[ ! -x "$FLY_VPN_BIN" ]]; then
-    err "Entry-point '$FLY_VPN_BIN' not found after uv sync."
+FLY_VPN_BIN="$(command -v fly-vpn || true)"
+if [[ -z "$FLY_VPN_BIN" ]]; then
+    err "fly-vpn not found on PATH after 'uv tool install'."
     exit 1
 fi
 
-ok "Dependencies synced"
+ok "Installed — $FLY_VPN_BIN"
 
 # ── OS dispatch ─────────────────────────────────────────────
 
@@ -244,12 +242,10 @@ install_macos() {
     # 1) Helper shell script that Terminal.app will source
     cat > "$macos_dir/run.sh" <<EOF
 #!/usr/bin/env bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:\$HOME/.fly/bin:\$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:\$HOME/.local/bin:\$HOME/.fly/bin:\$PATH"
 export FLY_NO_UPDATE_CHECK=1
 export HOMEBREW_NO_AUTO_UPDATE=1
-cd "$REPO_DIR"
-[ -f .env ] && { set -a; . .env; set +a; }
-exec "$FLY_VPN_BIN"
+exec fly-vpn
 EOF
     chmod +x "$macos_dir/run.sh"
 
@@ -305,7 +301,7 @@ install_linux() {
 Type=Application
 Name=${APP_NAME}
 Comment=Ephemeral Tailscale exit-node launcher on Fly.io
-Exec=bash -c 'cd ${REPO_DIR} && if [ -f .env ]; then set -a; . .env; set +a; fi; exec ${FLY_VPN_BIN}'
+Exec=bash -c 'export PATH="$HOME/.local/bin:$PATH"; exec ${FLY_VPN_BIN}'
 Terminal=true
 Categories=Network;VPN;Utility;
 Keywords=vpn;tailscale;fly;exit-node;
@@ -343,8 +339,6 @@ install_watchdog_macos() {
         <string>${FLY_VPN_BIN}</string>
         <string>--watchdog</string>
     </array>
-    <key>WorkingDirectory</key>
-    <string>${REPO_DIR}</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -373,7 +367,7 @@ PLIST
 }
 
 install_watchdog_linux() {
-    local cron_cmd="0 12 * * * cd $REPO_DIR && $FLY_VPN_BIN --watchdog >> /tmp/fly-vpn-watchdog.log 2>&1"
+    local cron_cmd="0 12 * * * $FLY_VPN_BIN --watchdog >> /tmp/fly-vpn-watchdog.log 2>&1"
     local cron_marker="# fly-vpn-watchdog"
 
     # Remove old entry if present, then add
@@ -426,6 +420,7 @@ uninstall_macos() {
         info "Nothing to remove — $app_dir does not exist."
     fi
     uninstall_watchdog_macos
+    uv tool uninstall fly-vpn 2>/dev/null && ok "Removed fly-vpn tool install" || true
 }
 
 uninstall_linux() {
@@ -440,6 +435,7 @@ uninstall_linux() {
         info "Nothing to remove — desktop entry does not exist."
     fi
     uninstall_watchdog_linux
+    uv tool uninstall fly-vpn 2>/dev/null && ok "Removed fly-vpn tool install" || true
 }
 
 # ── main ────────────────────────────────────────────────────

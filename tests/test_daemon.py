@@ -2,35 +2,36 @@
 
 from __future__ import annotations
 
+import plistlib
 from unittest.mock import MagicMock
 
 from flyexit import daemon
 
 
-def test_install_daemon_writes_plist_and_loads(monkeypatch, tmp_path):
+def _which(mapping):
+    return lambda name: mapping.get(name)
+
+
+def test_install_daemon_prefers_installed_tool_binary(monkeypatch, tmp_path):
     plist_path = tmp_path / "dev.flyvpn.daemon.plist"
     log_path = tmp_path / "fly-vpn-daemon.log"
     run_mock = MagicMock()
 
-    monkeypatch.setattr(daemon.shutil, "which", lambda _: "/opt/homebrew/bin/uv")
+    monkeypatch.setattr(
+        daemon.shutil, "which", _which({"fly-vpn": "/Users/me/.local/bin/fly-vpn"})
+    )
     monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
     monkeypatch.setattr(daemon, "_log_path", lambda: log_path)
     monkeypatch.setattr(daemon.subprocess, "run", run_mock)
 
     daemon.install_daemon()
 
-    assert plist_path.exists()
-    assert log_path.parent.exists()
-
-    import plistlib
-
     with plist_path.open("rb") as f:
         plist = plistlib.load(f)
 
     assert plist["Label"] == daemon._LABEL
-    assert plist["ProgramArguments"][0] == "/opt/homebrew/bin/uv"
-    assert plist["ProgramArguments"][-2:] == ["fly-vpn", "--web"]
-    assert plist["WorkingDirectory"] == str(daemon._repo_root())
+    assert plist["ProgramArguments"] == ["/Users/me/.local/bin/fly-vpn", "--web"]
+    assert plist["WorkingDirectory"] == str(daemon.Path.home())
     assert plist["RunAtLoad"] is True
     assert plist["KeepAlive"] is True
     assert plist["StandardOutPath"] == str(log_path)
@@ -40,11 +41,37 @@ def test_install_daemon_writes_plist_and_loads(monkeypatch, tmp_path):
     )
 
 
-def test_install_daemon_missing_uv(monkeypatch, tmp_path, capsys):
+def test_install_daemon_falls_back_to_uv_run_for_dev_checkout(monkeypatch, tmp_path):
+    plist_path = tmp_path / "dev.flyvpn.daemon.plist"
+    log_path = tmp_path / "fly-vpn-daemon.log"
+    run_mock = MagicMock()
+
+    monkeypatch.setattr(daemon.shutil, "which", _which({"uv": "/opt/homebrew/bin/uv"}))
+    monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
+    monkeypatch.setattr(daemon, "_log_path", lambda: log_path)
+    monkeypatch.setattr(daemon.subprocess, "run", run_mock)
+
+    daemon.install_daemon()
+
+    with plist_path.open("rb") as f:
+        plist = plistlib.load(f)
+
+    assert plist["ProgramArguments"] == [
+        "/opt/homebrew/bin/uv",
+        "run",
+        "--project",
+        str(daemon._repo_root()),
+        "fly-vpn",
+        "--web",
+    ]
+    assert plist["WorkingDirectory"] == str(daemon._repo_root())
+
+
+def test_install_daemon_missing_uv_and_fly_vpn(monkeypatch, tmp_path, capsys):
     plist_path = tmp_path / "dev.flyvpn.daemon.plist"
     run_mock = MagicMock()
 
-    monkeypatch.setattr(daemon.shutil, "which", lambda _: None)
+    monkeypatch.setattr(daemon.shutil, "which", _which({}))
     monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
     monkeypatch.setattr(daemon.subprocess, "run", run_mock)
 

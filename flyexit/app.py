@@ -280,8 +280,15 @@ class FlyVPNApp(App[None]):
         from pathlib import Path
 
         repo = Path(__file__).resolve().parent.parent
-        self.call_from_thread(self._log, "[dim]⬆  Checking for updates…[/]")
         try:
+            if not (repo / ".git").is_dir():
+                self.call_from_thread(
+                    self._log,
+                    "[dim]Installed as a standalone tool — re-run install.sh"
+                    " to update.[/]",
+                )
+                return
+            self.call_from_thread(self._log, "[dim]⬆  Checking for updates…[/]")
             pull = subprocess.run(
                 ["git", "pull", "--ff-only"],
                 cwd=repo,

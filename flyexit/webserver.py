@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import shlex
 import sys
-from pathlib import Path
 
 from textual_serve.server import Server
 
 from flyexit import config
-
-_MAIN_PY = Path(__file__).resolve().parent.parent / "main.py"
 
 
 def run_web(port: int | None = None) -> None:
@@ -18,9 +15,11 @@ def run_web(port: int | None = None) -> None:
 
     Each browser connection gets a fresh subprocess running the plain TUI
     (no flags), proxied over a websocket — the app itself is unmodified.
+    Invoked via `-m flyexit` so it works identically from a source checkout
+    or an installed tool, with no dependency on a `main.py` file existing.
     """
     if port is None:
         port = config.load()["web_port"]
 
-    command = shlex.join([sys.executable, str(_MAIN_PY)])
+    command = shlex.join([sys.executable, "-m", "flyexit"])
     Server(command, port=port).serve()

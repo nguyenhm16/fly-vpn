@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import sys
 from unittest.mock import MagicMock
 
@@ -32,7 +33,7 @@ def test_run_web_falls_back_to_configured_port(monkeypatch):
     assert kwargs["port"] == 1234
 
 
-def test_run_web_command_reinvokes_main_py(monkeypatch):
+def test_run_web_command_uses_module_invocation(monkeypatch):
     server_cls = MagicMock()
     monkeypatch.setattr(webserver, "Server", server_cls)
     monkeypatch.setattr(config_module, "load", lambda: {"web_port": 8000})
@@ -40,5 +41,4 @@ def test_run_web_command_reinvokes_main_py(monkeypatch):
     webserver.run_web(port=8000)
 
     (command,), _ = server_cls.call_args
-    assert command.startswith(sys.executable)
-    assert command.endswith("main.py")
+    assert command == shlex.join([sys.executable, "-m", "flyexit"])
