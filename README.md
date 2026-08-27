@@ -355,6 +355,27 @@ Tip: great as a daily cron safety net. The installer will offer to set this up a
 
 ---
 
+## Daemon & web mode
+
+Reach the TUI from a browser instead of a terminal:
+
+```bash
+uv run fly-vpn --web --port 8080   # --port optional, defaults to the configured web_port (8000)
+```
+
+Open `http://localhost:8080` — this serves the exact same Textual UI over a websocket (via [textual-serve](https://github.com/Textualize/textual-serve)), just rendered in the browser instead of your terminal.
+
+To run it unattended in the background on macOS, managed by `launchd` (starts at login, restarts on crash):
+
+```bash
+uv run fly-vpn --daemon-install     # writes ~/Library/LaunchAgents/dev.flyvpn.daemon.plist and loads it
+uv run fly-vpn --daemon-uninstall   # unloads and removes it
+```
+
+Logs go to `~/Library/Logs/fly-vpn-daemon.log`. This is purely additive — `uv run fly-vpn` with no flags still launches the interactive terminal TUI as before.
+
+---
+
 ## Troubleshooting quick hits
 
 - **"Fly.io not authenticated"** → press **`c`** to enter your Fly.io API token
@@ -382,9 +403,11 @@ flyexit/
 ├── config.py         # persistent user config (SQLite backed)
 ├── constants.py      # defaults, regions, timeouts
 ├── styles.py         # UI styling
-└── watchdog.py       # headless safety cleanup
+├── watchdog.py       # headless safety cleanup
+├── webserver.py      # serves the TUI over HTTP (--web)
+└── daemon.py         # launchd lifecycle management (--daemon-install/-uninstall)
 
-main.py            # entry-point (app / watchdog / setup-acl)
+main.py            # entry-point (app / watchdog / setup-acl / web / daemon)
 install.sh         # installer/uninstaller
 ```
 

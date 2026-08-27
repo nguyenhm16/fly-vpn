@@ -9,6 +9,7 @@ DEFAULT_REGION: Final = "ams"
 DEFAULT_APP_NAME: Final = "fly-vpn-node"
 DEFAULT_ORG: Final = "personal"
 DEFAULT_VM_MEMORY: Final = 512  # MB
+DEFAULT_WEB_PORT: Final = 8000
 
 # Choices for the memory selector (MB → label).
 VM_MEMORY_OPTIONS: Final[list[tuple[int, str]]] = [

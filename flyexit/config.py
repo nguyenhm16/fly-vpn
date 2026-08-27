@@ -11,6 +11,7 @@ from flyexit.constants import (
     DEFAULT_ORG,
     DEFAULT_REGION,
     DEFAULT_VM_MEMORY,
+    DEFAULT_WEB_PORT,
 )
 
 _DEFAULTS: dict[str, Any] = {
@@ -18,6 +19,7 @@ _DEFAULTS: dict[str, Any] = {
     "app_name": DEFAULT_APP_NAME,
     "org": DEFAULT_ORG,
     "vm_memory": DEFAULT_VM_MEMORY,
+    "web_port": DEFAULT_WEB_PORT,
 }
 
 
