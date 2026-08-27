@@ -214,6 +214,23 @@ else
     ok "Fly.io authenticated as $FLY_USER"
 fi
 
+# ── Tailscale CLI check ──────────────────────────────────────
+
+if ! command -v tailscale &>/dev/null; then
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &>/dev/null; then
+        info "'tailscale' CLI not found — installing via Homebrew…"
+        brew install tailscale
+        if command -v tailscale &>/dev/null; then
+            ok "tailscale installed"
+        else
+            info "Automatic install failed — see https://tailscale.com/download"
+        fi
+    else
+        info "'tailscale' CLI not found."
+        info "Install it before launching a session: https://tailscale.com/download"
+    fi
+fi
+
 # ── install as a standalone tool ────────────────────────────
 
 info "Installing fly-vpn as a standalone tool…"

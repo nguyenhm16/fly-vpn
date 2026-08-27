@@ -27,27 +27,37 @@ def _log_path() -> Path:
     return Path.home() / "Library" / "Logs" / "fly-vpn-daemon.log"
 
 
-def _daemon_path() -> str:
+def _tailscale_dir() -> str | None:
+    """Directory containing the `tailscale` CLI, resolved from this PATH."""
+    tailscale = shutil.which("tailscale")
+    if tailscale is None:
+        return None
+    return str(Path(tailscale).parent)
+
+
+def _tailscale_missing_hint() -> str:
+    if shutil.which("brew"):
+        install_hint = "  brew install tailscale"
+    else:
+        install_hint = "  https://tailscale.com/download"
+    return (
+        "Could not find the 'tailscale' CLI on PATH. Install it, e.g.:\n"
+        f"{install_hint}\n"
+        "then try again."
+    )
+
+
+def _daemon_path(tailscale_dir: str) -> str:
     """PATH for the launchd job's environment.
 
     launchd runs jobs with a minimal default PATH (no Homebrew), so
-    `tailscale`/`fly`/`uv` — all normally found via the user's shell PATH —
-    would otherwise be invisible to the daemon and anything it spawns
-    (including the per-browser-connection subprocess in --web mode).
+    `tailscale` — normally found via the user's shell PATH — would
+    otherwise be invisible to the daemon and anything it spawns (including
+    the per-browser-connection subprocess in --web mode). Uses tailscale's
+    actual resolved location rather than guessing common install
+    prefixes, so it works regardless of how/where it was installed.
     """
-    home = Path.home()
-    return ":".join(
-        [
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            str(home / ".local" / "bin"),
-            str(home / ".fly" / "bin"),
-            "/usr/bin",
-            "/bin",
-            "/usr/sbin",
-            "/sbin",
-        ]
-    )
+    return ":".join([tailscale_dir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
 
 
 def _web_command(port: int | None = None) -> tuple[list[str], Path]:
@@ -81,6 +91,11 @@ def _web_command(port: int | None = None) -> tuple[list[str], Path]:
 
 def install_daemon(port: int | None = None) -> None:
     """Write and load a launchd agent that runs `fly-vpn --web` in the background."""
+    tailscale_dir = _tailscale_dir()
+    if tailscale_dir is None:
+        print(_tailscale_missing_hint())
+        return
+
     try:
         program_arguments, working_directory = _web_command(port)
     except RuntimeError as exc:
@@ -97,7 +112,7 @@ def install_daemon(port: int | None = None) -> None:
         "RunAtLoad": True,
         "KeepAlive": True,
         "EnvironmentVariables": {
-            "PATH": _daemon_path(),
+            "PATH": _daemon_path(tailscale_dir),
             "FLY_NO_UPDATE_CHECK": "1",
         },
         "StandardOutPath": str(log_path),
