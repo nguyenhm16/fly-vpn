@@ -35,6 +35,7 @@ def test_install_daemon_prefers_installed_tool_binary(monkeypatch, tmp_path):
     assert plist["RunAtLoad"] is True
     assert plist["KeepAlive"] is True
     assert plist["StandardOutPath"] == str(log_path)
+    assert "/opt/homebrew/bin" in plist["EnvironmentVariables"]["PATH"]
 
     run_mock.assert_called_once_with(
         ["launchctl", "load", "-w", str(plist_path)], check=True

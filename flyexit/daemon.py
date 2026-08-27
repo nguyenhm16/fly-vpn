@@ -27,6 +27,29 @@ def _log_path() -> Path:
     return Path.home() / "Library" / "Logs" / "fly-vpn-daemon.log"
 
 
+def _daemon_path() -> str:
+    """PATH for the launchd job's environment.
+
+    launchd runs jobs with a minimal default PATH (no Homebrew), so
+    `tailscale`/`fly`/`uv` — all normally found via the user's shell PATH —
+    would otherwise be invisible to the daemon and anything it spawns
+    (including the per-browser-connection subprocess in --web mode).
+    """
+    home = Path.home()
+    return ":".join(
+        [
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            str(home / ".local" / "bin"),
+            str(home / ".fly" / "bin"),
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin",
+        ]
+    )
+
+
 def _web_command(port: int | None = None) -> tuple[list[str], Path]:
     """Return (ProgramArguments, WorkingDirectory) for the launchd job.
 
@@ -73,6 +96,10 @@ def install_daemon(port: int | None = None) -> None:
         "WorkingDirectory": str(working_directory),
         "RunAtLoad": True,
         "KeepAlive": True,
+        "EnvironmentVariables": {
+            "PATH": _daemon_path(),
+            "FLY_NO_UPDATE_CHECK": "1",
+        },
         "StandardOutPath": str(log_path),
         "StandardErrorPath": str(log_path),
     }
