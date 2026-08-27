@@ -27,7 +27,7 @@ def _log_path() -> Path:
     return Path.home() / "Library" / "Logs" / "fly-vpn-daemon.log"
 
 
-def _web_command() -> tuple[list[str], Path]:
+def _web_command(port: int | None = None) -> tuple[list[str], Path]:
     """Return (ProgramArguments, WorkingDirectory) for the launchd job.
 
     Prefers the standalone `fly-vpn` tool on PATH (installed via
@@ -35,9 +35,11 @@ def _web_command() -> tuple[list[str], Path]:
     `uv run --project <repo>` for dev checkouts that haven't installed it
     as a tool.
     """
+    port_args = ["--port", str(port)] if port is not None else []
+
     fly_vpn = shutil.which("fly-vpn")
     if fly_vpn:
-        return [fly_vpn, "--web"], Path.home()
+        return [fly_vpn, "--web", *port_args], Path.home()
 
     uv_path = shutil.which("uv")
     if uv_path is None:
@@ -49,15 +51,15 @@ def _web_command() -> tuple[list[str], Path]:
 
     repo_root = _repo_root()
     return (
-        [uv_path, "run", "--project", str(repo_root), "fly-vpn", "--web"],
+        [uv_path, "run", "--project", str(repo_root), "fly-vpn", "--web", *port_args],
         repo_root,
     )
 
 
-def install_daemon() -> None:
+def install_daemon(port: int | None = None) -> None:
     """Write and load a launchd agent that runs `fly-vpn --web` in the background."""
     try:
-        program_arguments, working_directory = _web_command()
+        program_arguments, working_directory = _web_command(port)
     except RuntimeError as exc:
         print(exc)
         return

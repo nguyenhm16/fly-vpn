@@ -41,6 +41,30 @@ def test_install_daemon_prefers_installed_tool_binary(monkeypatch, tmp_path):
     )
 
 
+def test_install_daemon_forwards_port(monkeypatch, tmp_path):
+    plist_path = tmp_path / "dev.flyvpn.daemon.plist"
+    log_path = tmp_path / "fly-vpn-daemon.log"
+
+    monkeypatch.setattr(
+        daemon.shutil, "which", _which({"fly-vpn": "/Users/me/.local/bin/fly-vpn"})
+    )
+    monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
+    monkeypatch.setattr(daemon, "_log_path", lambda: log_path)
+    monkeypatch.setattr(daemon.subprocess, "run", MagicMock())
+
+    daemon.install_daemon(port=9999)
+
+    with plist_path.open("rb") as f:
+        plist = plistlib.load(f)
+
+    assert plist["ProgramArguments"] == [
+        "/Users/me/.local/bin/fly-vpn",
+        "--web",
+        "--port",
+        "9999",
+    ]
+
+
 def test_install_daemon_falls_back_to_uv_run_for_dev_checkout(monkeypatch, tmp_path):
     plist_path = tmp_path / "dev.flyvpn.daemon.plist"
     log_path = tmp_path / "fly-vpn-daemon.log"

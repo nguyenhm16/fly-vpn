@@ -368,8 +368,8 @@ Open `http://localhost:8080` — this serves the exact same Textual UI over a we
 To run it unattended in the background on macOS, managed by `launchd` (starts at login, restarts on crash):
 
 ```bash
-uv run fly-vpn --daemon-install     # writes ~/Library/LaunchAgents/dev.flyvpn.daemon.plist and loads it
-uv run fly-vpn --daemon-uninstall   # unloads and removes it
+uv run fly-vpn --daemon-install --port 8080   # --port optional, defaults to 8000; writes ~/Library/LaunchAgents/dev.flyvpn.daemon.plist and loads it
+uv run fly-vpn --daemon-uninstall             # unloads and removes it
 ```
 
 Logs go to `~/Library/Logs/fly-vpn-daemon.log`. This is purely additive — `uv run fly-vpn` with no flags still launches the interactive terminal TUI as before.

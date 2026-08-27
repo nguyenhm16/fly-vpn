@@ -47,7 +47,7 @@ def main() -> None:
     if "--daemon-install" in sys.argv:
         from flyexit.daemon import install_daemon
 
-        install_daemon()
+        install_daemon(_port_from_argv())
         return
 
     if "--daemon-uninstall" in sys.argv:
