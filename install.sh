@@ -218,7 +218,7 @@ fi
 
 info "Installing fly-vpn as a standalone tool…"
 export PATH="$HOME/.local/bin:$PATH"
-uv tool install --force "$REPO_DIR"
+uv tool install --reinstall "$REPO_DIR"
 
 FLY_VPN_BIN="$(command -v fly-vpn || true)"
 if [[ -z "$FLY_VPN_BIN" ]]; then

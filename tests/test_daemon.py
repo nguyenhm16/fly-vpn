@@ -65,6 +65,33 @@ def test_install_daemon_forwards_port(monkeypatch, tmp_path):
     ]
 
 
+def test_install_daemon_unloads_existing_job_before_reinstalling(monkeypatch, tmp_path):
+    plist_path = tmp_path / "dev.flyvpn.daemon.plist"
+    plist_path.write_bytes(b"placeholder")  # simulates an already-installed job
+    log_path = tmp_path / "fly-vpn-daemon.log"
+    run_mock = MagicMock()
+
+    monkeypatch.setattr(
+        daemon.shutil, "which", _which({"fly-vpn": "/Users/me/.local/bin/fly-vpn"})
+    )
+    monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
+    monkeypatch.setattr(daemon, "_log_path", lambda: log_path)
+    monkeypatch.setattr(daemon.subprocess, "run", run_mock)
+
+    daemon.install_daemon(port=7777)
+
+    assert run_mock.call_args_list == [
+        (
+            (["launchctl", "unload", "-w", str(plist_path)],),
+            {"check": False},
+        ),
+        (
+            (["launchctl", "load", "-w", str(plist_path)],),
+            {"check": True},
+        ),
+    ]
+
+
 def test_install_daemon_falls_back_to_uv_run_for_dev_checkout(monkeypatch, tmp_path):
     plist_path = tmp_path / "dev.flyvpn.daemon.plist"
     log_path = tmp_path / "fly-vpn-daemon.log"

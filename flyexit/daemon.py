@@ -79,6 +79,13 @@ def install_daemon(port: int | None = None) -> None:
 
     plist_path = _plist_path()
     plist_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if plist_path.exists():
+        # Re-installing (e.g. to change the port): launchd won't pick up
+        # new ProgramArguments for an already-loaded job unless it's
+        # unloaded first.
+        subprocess.run(["launchctl", "unload", "-w", str(plist_path)], check=False)
+
     with plist_path.open("wb") as f:
         plistlib.dump(plist, f)
 
