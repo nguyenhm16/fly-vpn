@@ -88,6 +88,7 @@ class FlyVPNApp(App[None]):
         self._launching = False
         self._stopping = False
         self._quitting = False
+        self._session_detection_ran = False
 
         atexit.register(self._session.emergency_cleanup)
 
@@ -119,6 +120,37 @@ class FlyVPNApp(App[None]):
                 " in Settings ([bold]c[/]) or your .env file."
             )
             self.query_one("#btn-launch", Button).disabled = True
+
+        self._detect_running_session()
+
+    @work(thread=True)
+    def _detect_running_session(self) -> None:
+        """Reflect a session already running from elsewhere (`--start`,
+        another TUI/browser front-end) instead of assuming nothing is
+        active just because this process's VPNSession was freshly built —
+        otherwise Launch would destroy-and-recreate the running app."""
+        from flyexit.fly_ops import app_exists
+
+        app_name = self._cfg.get("app_name", DEFAULT_APP_NAME)
+        try:
+            running = app_exists(app_name)
+        except Exception:  # noqa: BLE001
+            running = False
+        finally:
+            self._session_detection_ran = True
+
+        if not running:
+            return
+
+        self._session.attach(app_name)
+        self.call_from_thread(
+            self._log,
+            f"[dim]🔎 Detected an already-running session ([bold]{app_name}[/bold])[/]",
+        )
+        self.call_from_thread(self._set_buttons, launching=True)
+        self.call_from_thread(
+            self._set_status, "🟢 Session already running — press Stop to end"
+        )
 
     def compose(self) -> ComposeResult:
         yield Header()

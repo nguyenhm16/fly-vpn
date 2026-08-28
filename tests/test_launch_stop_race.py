@@ -39,6 +39,7 @@ from flyexit.session import PreflightResult, PreflightStatus
 def app(monkeypatch):
     """FlyVPNApp with all external I/O neutralised."""
     from flyexit import config as cfg_module
+    from flyexit import fly_ops
 
     monkeypatch.setattr(cfg_module, "load", lambda: {"region": "ams"})
     monkeypatch.setattr(cfg_module, "save", lambda _: None)
@@ -46,6 +47,10 @@ def app(monkeypatch):
     # Ensure no real Tailscale client is constructed.
     monkeypatch.setenv("TAILSCALE_AUTHKEY", "")
     monkeypatch.setenv("TAILSCALE_API_KEY", "")
+
+    # on_mount()'s startup session-detection check would otherwise hit the
+    # real Fly API on every test that mounts the app.
+    monkeypatch.setattr(fly_ops, "app_exists", lambda _name: False)
 
     from flyexit.app import FlyVPNApp
 

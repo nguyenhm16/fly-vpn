@@ -107,7 +107,7 @@ def test_run_stop_destroys_running_app(monkeypatch):
 
     headless.run_stop()  # should not raise/exit
 
-    assert session.app_name == "fly-vpn-node-abc123"
+    session.attach.assert_called_once_with("fly-vpn-node-abc123")
     session.teardown.assert_called_once()
 
 

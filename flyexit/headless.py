@@ -115,7 +115,7 @@ def run_stop() -> None:
         return
 
     session = _build_session()
-    session.app_name = app_name
+    session.attach(app_name)
 
     print("Stopping node…")
     _, ok = session.teardown()

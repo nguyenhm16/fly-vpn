@@ -116,6 +116,7 @@ class VPNSession:
     ) -> None:
         self.process: subprocess.Popen[str] | None = None
         self.app_name: str | None = None
+        self._owns_app = False
         self._ts_auth_key = ts_auth_key
         self._ts_login_server = ts_login_server
         self._ts_tailnet = ts_tailnet
@@ -139,6 +140,18 @@ class VPNSession:
     def is_active(self) -> bool:
         """True when a machine is launching or running."""
         return self.process is not None or self.app_name is not None
+
+    def attach(self, app_name: str) -> None:
+        """Associate with a session already running from elsewhere (e.g.
+        detected on startup, not created by this instance's own launch()).
+
+        Reflects it as active for UI/teardown() purposes, but deliberately
+        does NOT take implicit-cleanup ownership: emergency_cleanup() (the
+        atexit/signal safety net) must not tear down a session this
+        instance never launched just because its process happened to
+        exit — only an explicit teardown()/Stop should do that.
+        """
+        self.app_name = app_name
 
     def _start_usage_log(self, region: str, memory_mb: int = 256) -> None:
         try:
@@ -238,6 +251,7 @@ class VPNSession:
         is available, a short-lived auth key is generated automatically.
         """
         self.app_name = app_name
+        self._owns_app = True
 
         # Resolve auth key: explicit > auto-generated via API.
         auth_key = self._ts_auth_key
@@ -263,10 +277,7 @@ class VPNSession:
         if api is None:
             return LaunchResult(
                 status=LaunchStatus.ERROR,
-                error=(
-                    "No Fly.io API token found."
-                    " Press [bold]c[/] to open Settings."
-                ),
+                error=("No Fly.io API token found. Press [bold]c[/] to open Settings."),
             )
 
         try:
@@ -336,8 +347,17 @@ class VPNSession:
         Handles SIGINT, SIGTERM, SIGHUP, and atexit.
         Disconnects Tailscale, destroys Fly app, and removes
         the device from the tailnet.  No UI, no exceptions.
+
+        No-op if this instance merely attach()ed to a session it didn't
+        launch itself — e.g. a browser/terminal front-end that opened
+        while a `--start`-launched session was already running must not
+        tear it down just because *that front-end's* process exits.
+        Only an explicit teardown() (Stop button / `--stop`) may end a
+        session this instance doesn't own.
         """
         self._end_usage_log()
+        if not self._owns_app:
+            return
         disconnect_exit_node()
         force_kill_process(self.process)
         self.process = None
@@ -368,6 +388,7 @@ class VPNSession:
 
         ok = destroy_app(app_name)
         self.app_name = None
+        self._owns_app = False
 
         if self._client is not None:
             device_id = get_device_id()
