@@ -223,16 +223,11 @@ class FlyVPNApp(App[None]):
                             id="btn-stop",
                             disabled=True,
                         )
-                        yield Button(
-                            "🔄 Refresh",
-                            variant="default",
-                            id="btn-refresh",
-                        )
                 with Vertical(id="stats-col"):
                     yield Static("", id="stats-text")
                     yield Sparkline([], id="cost-spark")
-                    with Horizontal(id="update-row"):
-                        yield Button("↑ Update", variant="default", id="btn-update")
+                    with Horizontal(id="refresh-row"):
+                        yield Button("🔄 Refresh", variant="default", id="btn-refresh")
             yield Static("Ready", id="status-bar")
             with Container(id="log-box"):
                 yield RichLog(highlight=True, markup=True, id="log")
@@ -345,75 +340,9 @@ class FlyVPNApp(App[None]):
     def _handle_stop(self) -> None:
         self._do_stop()
 
-    @on(Button.Pressed, "#btn-update")
-    def _handle_update(self) -> None:
-        self.query_one("#btn-update", Button).disabled = True
-        self.query_one("#btn-update", Button).label = "⏳ Updating…"
-        self._run_update()
-
     # ------------------------------------------------------------------
     # Workers
     # ------------------------------------------------------------------
-
-    @work(thread=True)
-    def _run_update(self) -> None:
-        import subprocess
-        from pathlib import Path
-
-        repo = Path(__file__).resolve().parent.parent
-        try:
-            if not (repo / ".git").is_dir():
-                self.call_from_thread(
-                    self._log,
-                    "[dim]Installed as a standalone tool — re-run install.sh"
-                    " to update.[/]",
-                )
-                return
-            self.call_from_thread(self._log, "[dim]⬆  Checking for updates…[/]")
-            pull = subprocess.run(
-                ["git", "pull", "--ff-only"],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            msg = pull.stdout.strip() or pull.stderr.strip()
-            if pull.returncode != 0:
-                self.call_from_thread(
-                    self._log, f"[bold red]❌ git pull failed:[/] {msg}"
-                )
-                return
-            if "Already up to date" in msg:
-                self.call_from_thread(self._log, "[dim]✔ Already up to date[/]")
-                return
-            self.call_from_thread(self._log, f"[dim]{msg}[/]")
-            self.call_from_thread(self._log, "[dim]📦 Syncing dependencies…[/]")
-            sync = subprocess.run(
-                ["uv", "sync"],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if sync.returncode != 0:
-                self.call_from_thread(
-                    self._log,
-                    f"[bold red]❌ uv sync failed:[/] {sync.stderr.strip()}",
-                )
-                return
-            self.call_from_thread(
-                self._log,
-                "[bold green]✅ Updated! Restart Fly VPN to apply changes.[/]",
-            )
-        except Exception as exc:  # noqa: BLE001
-            self.call_from_thread(self._log, f"[bold red]❌ Update error:[/] {exc}")
-        finally:
-            self.call_from_thread(
-                lambda: (
-                    setattr(self.query_one("#btn-update", Button), "disabled", False),
-                    setattr(self.query_one("#btn-update", Button), "label", "↑ Update"),
-                ),
-            )
 
     def _do_launch(self) -> None:
         if self._launching:
