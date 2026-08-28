@@ -30,5 +30,3 @@ def set(key: str, value: str) -> None:  # noqa: A001
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
-
-
