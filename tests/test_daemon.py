@@ -5,6 +5,8 @@ from __future__ import annotations
 import plistlib
 from unittest.mock import MagicMock
 
+import pytest
+
 from flyexit import daemon
 
 _TAILSCALE = {"tailscale": "/opt/homebrew/bin/tailscale"}
@@ -12,6 +14,16 @@ _TAILSCALE = {"tailscale": "/opt/homebrew/bin/tailscale"}
 
 def _which(mapping):
     return lambda name: mapping.get(name)
+
+
+@pytest.fixture(autouse=True)
+def _config(monkeypatch):
+    """Isolate from this machine's real ~/.fly_vpn.db, and let tests
+    observe/seed what install_daemon() persists for web_port."""
+    cfg = {"web_port": 8000}
+    monkeypatch.setattr(daemon.config, "load", lambda: dict(cfg))
+    monkeypatch.setattr(daemon.config, "save", cfg.update)
+    return cfg
 
 
 def test_install_daemon_prefers_installed_tool_binary(monkeypatch, tmp_path):
@@ -34,7 +46,12 @@ def test_install_daemon_prefers_installed_tool_binary(monkeypatch, tmp_path):
         plist = plistlib.load(f)
 
     assert plist["Label"] == daemon._LABEL
-    assert plist["ProgramArguments"] == ["/Users/me/.local/bin/fly-vpn", "--web"]
+    assert plist["ProgramArguments"] == [
+        "/Users/me/.local/bin/fly-vpn",
+        "--web",
+        "--port",
+        "8000",
+    ]
     assert plist["WorkingDirectory"] == str(daemon.Path.home())
     assert plist["RunAtLoad"] is True
     assert plist["KeepAlive"] is True
@@ -133,6 +150,51 @@ def test_install_daemon_forwards_port(monkeypatch, tmp_path):
     ]
 
 
+def test_install_daemon_persists_explicit_port(monkeypatch, tmp_path, _config):
+    """--daemon-install --port N must persist N, so `--status` (a separate
+    process) reports the port the daemon is actually running on."""
+    plist_path = tmp_path / "dev.flyvpn.daemon.plist"
+    log_path = tmp_path / "fly-vpn-daemon.log"
+
+    monkeypatch.setattr(
+        daemon.shutil,
+        "which",
+        _which({**_TAILSCALE, "fly-vpn": "/Users/me/.local/bin/fly-vpn"}),
+    )
+    monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
+    monkeypatch.setattr(daemon, "_log_path", lambda: log_path)
+    monkeypatch.setattr(daemon.subprocess, "run", MagicMock())
+
+    daemon.install_daemon(port=9999)
+
+    assert _config["web_port"] == 9999
+
+
+def test_install_daemon_no_port_reuses_default_without_saving(
+    monkeypatch, tmp_path, _config
+):
+    plist_path = tmp_path / "dev.flyvpn.daemon.plist"
+    log_path = tmp_path / "fly-vpn-daemon.log"
+    save_mock = MagicMock(side_effect=_config.update)
+
+    monkeypatch.setattr(
+        daemon.shutil,
+        "which",
+        _which({**_TAILSCALE, "fly-vpn": "/Users/me/.local/bin/fly-vpn"}),
+    )
+    monkeypatch.setattr(daemon, "_plist_path", lambda: plist_path)
+    monkeypatch.setattr(daemon, "_log_path", lambda: log_path)
+    monkeypatch.setattr(daemon.subprocess, "run", MagicMock())
+    monkeypatch.setattr(daemon.config, "save", save_mock)
+
+    daemon.install_daemon()  # no explicit port
+
+    save_mock.assert_not_called()
+    with plist_path.open("rb") as f:
+        plist = plistlib.load(f)
+    assert plist["ProgramArguments"][-2:] == ["--port", "8000"]
+
+
 def test_install_daemon_unloads_existing_job_before_reinstalling(monkeypatch, tmp_path):
     plist_path = tmp_path / "dev.flyvpn.daemon.plist"
     plist_path.write_bytes(b"placeholder")  # simulates an already-installed job
@@ -188,6 +250,8 @@ def test_install_daemon_falls_back_to_uv_run_for_dev_checkout(monkeypatch, tmp_p
         str(daemon._repo_root()),
         "fly-vpn",
         "--web",
+        "--port",
+        "8000",
     ]
     assert plist["WorkingDirectory"] == str(daemon._repo_root())
 

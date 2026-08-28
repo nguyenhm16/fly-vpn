@@ -12,6 +12,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from flyexit import config
+
 _LABEL = "dev.flyvpn.daemon"
 
 
@@ -60,7 +62,7 @@ def _daemon_path(tailscale_dir: str) -> str:
     return ":".join([tailscale_dir, "/usr/bin", "/bin", "/usr/sbin", "/sbin"])
 
 
-def _web_command(port: int | None = None) -> tuple[list[str], Path]:
+def _web_command(port: int) -> tuple[list[str], Path]:
     """Return (ProgramArguments, WorkingDirectory) for the launchd job.
 
     Prefers the standalone `fly-vpn` tool on PATH (installed via
@@ -68,7 +70,7 @@ def _web_command(port: int | None = None) -> tuple[list[str], Path]:
     `uv run --project <repo>` for dev checkouts that haven't installed it
     as a tool.
     """
-    port_args = ["--port", str(port)] if port is not None else []
+    port_args = ["--port", str(port)]
 
     fly_vpn = shutil.which("fly-vpn")
     if fly_vpn:
@@ -95,6 +97,16 @@ def install_daemon(port: int | None = None) -> None:
     if tailscale_dir is None:
         print(_tailscale_missing_hint())
         return
+
+    # Persist an explicit --port so it becomes the new default — this is
+    # also what makes `fly-vpn --status` report the port the daemon is
+    # actually running on, rather than always the stock default.
+    cfg = config.load()
+    if port is None:
+        port = cfg["web_port"]
+    elif port != cfg["web_port"]:
+        cfg["web_port"] = port
+        config.save(cfg)
 
     try:
         program_arguments, working_directory = _web_command(port)
