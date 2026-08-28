@@ -84,8 +84,7 @@ def _import_legacy_json_config(conn: sqlite3.Connection) -> None:
             _LEGACY_JSON_CONFIG.read_text(encoding="utf-8")
         )
         conn.executemany(
-            "INSERT INTO settings(key, value) VALUES(?, ?)"
-            " ON CONFLICT(key) DO NOTHING",
+            "INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO NOTHING",
             [(k, str(v)) for k, v in data.items()],
         )
         _LEGACY_JSON_CONFIG.rename(_LEGACY_JSON_CONFIG.with_suffix(".json.bak"))

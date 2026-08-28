@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.28",
     "python-dotenv>=1.0.1",
     "textual>=1.0.0",
+    "textual-serve>=1.1.3",
 ]
 
 [dependency-groups]
@@ -18,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-fly-vpn = "main:main"
+fly-vpn = "flyexit.cli:main"
 
 [build-system]
 requires = ["hatchling"]

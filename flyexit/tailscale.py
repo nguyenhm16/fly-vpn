@@ -104,6 +104,31 @@ def current_tailnet() -> str | None:
     return name
 
 
+def is_exit_node_active(hostname: str = TS_EXIT_HOSTNAME) -> bool:
+    """Check if *hostname* is currently the active exit node for local
+    traffic — unlike :func:`is_exit_node_online`, which only checks that
+    the peer is visible/online in the tailnet, not actually selected."""
+    try:
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        return False
+    if result.returncode != 0:
+        return False
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError):  # fmt: skip
+        return False
+    for peer in (data.get("Peer") or {}).values():
+        if peer.get("HostName") == hostname and peer.get("ExitNode"):
+            return True
+    return False
+
+
 def switch_tailnet(target: str) -> tuple[bool, str]:
     """Switch the local Tailscale client to a different logged-in account.
 

@@ -31,3 +31,9 @@ jobs:
 
       - name: Build package
         run: uv build
+
+      - name: Smoke-test installed wheel outside the source checkout
+        run: |
+          python -m venv /tmp/fly-vpn-smoke
+          /tmp/fly-vpn-smoke/bin/pip install dist/*.whl
+          /tmp/fly-vpn-smoke/bin/fly-vpn --stats

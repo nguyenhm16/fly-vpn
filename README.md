@@ -325,6 +325,21 @@ python main.py
 | `t` | Toggle dark/light theme |
 | `q` | Quit |
 
+Each terminal window and browser tab (`--web`/`--daemon-install`) runs its own independent front-end with no shared in-memory state — a **🔄 Refresh** button next to Launch/Stop re-checks the real Fly.io state on demand, so a tab that's gone stale (e.g. the session was started or stopped from `--start`/`--stop`/another tab) can catch up without reopening it. This also runs automatically once at startup, which is why Launch stays disabled for a moment after opening — it's confirming nothing is already running before allowing a new one.
+
+### Headless CLI mode
+
+Launch, tear down, or inspect a session without opening the TUI, e.g. for scripting:
+
+```bash
+fly-vpn --start    # launch and connect, using saved region/memory settings
+fly-vpn --stop     # disconnect and destroy the exit node
+fly-vpn --status   # print current configuration and whether a session is running
+fly-vpn --help     # list all CLI flags
+```
+
+`--start` blocks until connected (or failed) and exits — the exit node keeps running independently after that. `--stop`/`--status` always target this install's app directly, so they work correctly even from a separate invocation with no in-memory session state.
+
 ---
 
 ## Safety model
@@ -351,7 +366,28 @@ python main.py --watchdog
 
 It checks for orphaned app resources and destroys them to prevent charges.
 
-Tip: great as a daily cron safety net. The installer will offer to set this up automatically.
+Tip: great as a daily cron safety net. The installer will offer to schedule this automatically, running once a day at **midnight** (`launchd` on macOS, `crontab` on Linux) — so a session left connected overnight gets caught as early as possible, rather than sitting exposed all night until some other time of day.
+
+---
+
+## Daemon & web mode
+
+Reach the TUI from a browser instead of a terminal:
+
+```bash
+uv run fly-vpn --web --port 8080   # --port optional, defaults to the configured web_port (8000)
+```
+
+Open `http://localhost:8080` — this serves the exact same Textual UI over a websocket (via [textual-serve](https://github.com/Textualize/textual-serve)), just rendered in the browser instead of your terminal. On macOS, Safari's **Add to Dock** turns that page into a standalone window. Quitting the app inside it (`q`) can't actually close that window — browsers refuse to let a page script-close a window it didn't open itself, Add to Dock included — so instead it shows a plain "Fly VPN quit — press ⌘Q to close this window" message rather than textual-serve's default "Session ended. Restart" screen.
+
+To run it unattended in the background on macOS, managed by `launchd` (starts at login, restarts on crash):
+
+```bash
+uv run fly-vpn --daemon-install --port 8080   # --port optional, defaults to 8000; writes ~/Library/LaunchAgents/dev.flyvpn.daemon.plist and loads it
+uv run fly-vpn --daemon-uninstall             # unloads and removes it
+```
+
+Logs go to `~/Library/Logs/fly-vpn-daemon.log`. This is purely additive — `uv run fly-vpn` with no flags still launches the interactive terminal TUI as before.
 
 ---
 
@@ -368,9 +404,12 @@ Tip: great as a daily cron safety net. The installer will offer to set this up a
 
 ```
 flyexit/
+├── cli.py            # CLI dispatch (app / start / stop / watchdog / setup-acl / web / daemon)
+├── __main__.py       # `python -m flyexit` entry point
 ├── app.py            # UI layer (Textual only)
 ├── settings_screen.py # Credential management UI
 ├── session.py        # business orchestration (preflight/launch/connect/teardown)
+├── headless.py        # --start/--stop: session control without the TUI
 ├── fly_api.py        # Direct Machines REST API client (httpx)
 ├── fly_ops.py        # Fly.io orchestration (using fly_api)
 ├── db.py             # Unified SQLite connection & migrations
@@ -382,9 +421,11 @@ flyexit/
 ├── config.py         # persistent user config (SQLite backed)
 ├── constants.py      # defaults, regions, timeouts
 ├── styles.py         # UI styling
-└── watchdog.py       # headless safety cleanup
+├── watchdog.py       # headless safety cleanup
+├── webserver.py      # serves the TUI over HTTP (--web)
+└── daemon.py         # launchd lifecycle management (--daemon-install/-uninstall)
 
-main.py            # entry-point (app / watchdog / setup-acl)
+main.py            # dev-checkout shim → flyexit.cli:main
 install.sh         # installer/uninstaller
 ```
 

@@ -88,6 +88,8 @@ class FlyVPNApp(App[None]):
         self._launching = False
         self._stopping = False
         self._quitting = False
+        self._refreshing = False
+        self._session_detection_ran = False
 
         atexit.register(self._session.emergency_cleanup)
 
@@ -118,7 +120,80 @@ class FlyVPNApp(App[None]):
                 "Set [bold]TAILSCALE_API_KEY[/] or [bold]TAILSCALE_AUTHKEY[/]"
                 " in Settings ([bold]c[/]) or your .env file."
             )
-            self.query_one("#btn-launch", Button).disabled = True
+
+        self._refresh_session_state()
+
+    @on(Button.Pressed, "#btn-refresh")
+    def _handle_refresh(self) -> None:
+        if self._launching or self._stopping or self._refreshing:
+            return
+        self._log("[dim]🔄 Refreshing…[/]")
+        self._refresh_session_state(manual=True)
+
+    @work(thread=True)
+    def _refresh_session_state(self, *, manual: bool = False) -> None:
+        """Sync this front-end's view with the real Fly app state.
+
+        Every front-end (terminal TUI, each --web/--daemon browser
+        connection, `--start`/`--stop`) is a separate process with no
+        shared in-memory state — this is the only way one of them learns
+        what another did. Runs automatically on startup (also gating
+        Launch until it completes — otherwise a click landing before this
+        finishes could launch concurrently with a session started
+        elsewhere, corrupting both) and on demand via the Refresh button.
+        """
+        from flyexit.fly_ops import app_exists
+
+        self._refreshing = True
+        app_name = self._cfg.get("app_name", DEFAULT_APP_NAME)
+        try:
+            running = app_exists(app_name)
+        except Exception:  # noqa: BLE001
+            self._refreshing = False
+            if manual:
+                self.call_from_thread(
+                    self._log, "[bold red]⚠  Couldn't reach Fly.io API to refresh.[/]"
+                )
+            return
+        finally:
+            self._session_detection_ran = True
+            self._refreshing = False
+
+        was_active = self._session.is_active
+
+        if running and not was_active:
+            self._session.attach(app_name)
+            self.call_from_thread(
+                self._log,
+                f"[dim]🔎 Detected an already-running session"
+                f" ([bold]{app_name}[/bold])[/]",
+            )
+            self.call_from_thread(self._set_buttons, launching=True)
+            self.call_from_thread(
+                self._set_status, "🟢 Session already running — press Stop to end"
+            )
+            return
+
+        if not running and was_active:
+            self._session.detach()
+            self.call_from_thread(
+                self._log, "[dim]🔌 Session ended elsewhere — no longer running.[/]"
+            )
+            self.call_from_thread(self._set_buttons, launching=False)
+            self.call_from_thread(self._set_status, "Ready")
+            return
+
+        if manual:
+            state = "still running" if running else "still nothing running"
+            self.call_from_thread(self._log, f"[dim]✔ Refreshed — {state}.[/]")
+
+        if not running and self._session.has_auth:
+            # Confirmed nothing is running — safe to allow Launch now.
+            self.call_from_thread(
+                lambda: setattr(
+                    self.query_one("#btn-launch", Button), "disabled", False
+                )
+            )
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -140,6 +215,7 @@ class FlyVPNApp(App[None]):
                             "🚀 Launch",
                             variant="success",
                             id="btn-launch",
+                            disabled=True,  # enabled once startup check clears
                         )
                         yield Button(
                             "🛑 Stop",
@@ -150,8 +226,8 @@ class FlyVPNApp(App[None]):
                 with Vertical(id="stats-col"):
                     yield Static("", id="stats-text")
                     yield Sparkline([], id="cost-spark")
-                    with Horizontal(id="update-row"):
-                        yield Button("↑ Update", variant="default", id="btn-update")
+                    with Horizontal(id="refresh-row"):
+                        yield Button("🔄 Refresh", variant="default", id="btn-refresh")
             yield Static("Ready", id="status-bar")
             with Container(id="log-box"):
                 yield RichLog(highlight=True, markup=True, id="log")
@@ -264,68 +340,9 @@ class FlyVPNApp(App[None]):
     def _handle_stop(self) -> None:
         self._do_stop()
 
-    @on(Button.Pressed, "#btn-update")
-    def _handle_update(self) -> None:
-        self.query_one("#btn-update", Button).disabled = True
-        self.query_one("#btn-update", Button).label = "⏳ Updating…"
-        self._run_update()
-
     # ------------------------------------------------------------------
     # Workers
     # ------------------------------------------------------------------
-
-    @work(thread=True)
-    def _run_update(self) -> None:
-        import subprocess
-        from pathlib import Path
-
-        repo = Path(__file__).resolve().parent.parent
-        self.call_from_thread(self._log, "[dim]⬆  Checking for updates…[/]")
-        try:
-            pull = subprocess.run(
-                ["git", "pull", "--ff-only"],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            msg = pull.stdout.strip() or pull.stderr.strip()
-            if pull.returncode != 0:
-                self.call_from_thread(
-                    self._log, f"[bold red]❌ git pull failed:[/] {msg}"
-                )
-                return
-            if "Already up to date" in msg:
-                self.call_from_thread(self._log, "[dim]✔ Already up to date[/]")
-                return
-            self.call_from_thread(self._log, f"[dim]{msg}[/]")
-            self.call_from_thread(self._log, "[dim]📦 Syncing dependencies…[/]")
-            sync = subprocess.run(
-                ["uv", "sync"],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if sync.returncode != 0:
-                self.call_from_thread(
-                    self._log,
-                    f"[bold red]❌ uv sync failed:[/] {sync.stderr.strip()}",
-                )
-                return
-            self.call_from_thread(
-                self._log,
-                "[bold green]✅ Updated! Restart Fly VPN to apply changes.[/]",
-            )
-        except Exception as exc:  # noqa: BLE001
-            self.call_from_thread(self._log, f"[bold red]❌ Update error:[/] {exc}")
-        finally:
-            self.call_from_thread(
-                lambda: (
-                    setattr(self.query_one("#btn-update", Button), "disabled", False),
-                    setattr(self.query_one("#btn-update", Button), "label", "↑ Update"),
-                ),
-            )
 
     def _do_launch(self) -> None:
         if self._launching:

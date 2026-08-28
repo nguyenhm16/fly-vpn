@@ -187,17 +187,13 @@ class SettingsScreen(ModalScreen[bool]):
 
         if bid.startswith("btn-copy-"):
             fid = bid.removeprefix("btn-copy-")
-            url = next(
-                (f["url"] for f in _FIELDS if f["id"] == fid), ""
-            )
+            url = next((f["url"] for f in _FIELDS if f["id"] == fid), "")
             if url:
                 self._copy_to_clipboard(url, event.button)
 
         elif bid.startswith("btn-open-"):
             fid = bid.removeprefix("btn-open-")
-            url = next(
-                (f["url"] for f in _FIELDS if f["id"] == fid), ""
-            )
+            url = next((f["url"] for f in _FIELDS if f["id"] == fid), "")
             if url:
                 webbrowser.open(url)
 

@@ -46,7 +46,7 @@ fi
 
 # ── .env setup ──────────────────────────────────────────────
 
-ENV_FILE="$REPO_DIR/.env"
+ENV_FILE="$HOME/.fly_vpn.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then
     echo ""
@@ -214,21 +214,36 @@ else
     ok "Fly.io authenticated as $FLY_USER"
 fi
 
-# ── resolve python & venv ───────────────────────────────────
+# ── Tailscale CLI check ──────────────────────────────────────
 
-info "Syncing dependencies…"
-(cd "$REPO_DIR" && uv sync --quiet)
+if ! command -v tailscale &>/dev/null; then
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &>/dev/null; then
+        info "'tailscale' CLI not found — installing via Homebrew…"
+        brew install tailscale
+        if command -v tailscale &>/dev/null; then
+            ok "tailscale installed"
+        else
+            info "Automatic install failed — see https://tailscale.com/download"
+        fi
+    else
+        info "'tailscale' CLI not found."
+        info "Install it before launching a session: https://tailscale.com/download"
+    fi
+fi
 
-# Resolve the fly-vpn entry-point that uv created
-VENV_BIN="$REPO_DIR/.venv/bin"
-FLY_VPN_BIN="$VENV_BIN/fly-vpn"
+# ── install as a standalone tool ────────────────────────────
 
-if [[ ! -x "$FLY_VPN_BIN" ]]; then
-    err "Entry-point '$FLY_VPN_BIN' not found after uv sync."
+info "Installing fly-vpn as a standalone tool…"
+export PATH="$HOME/.local/bin:$PATH"
+uv tool install --reinstall "$REPO_DIR"
+
+FLY_VPN_BIN="$(command -v fly-vpn || true)"
+if [[ -z "$FLY_VPN_BIN" ]]; then
+    err "fly-vpn not found on PATH after 'uv tool install'."
     exit 1
 fi
 
-ok "Dependencies synced"
+ok "Installed — $FLY_VPN_BIN"
 
 # ── OS dispatch ─────────────────────────────────────────────
 
@@ -244,12 +259,10 @@ install_macos() {
     # 1) Helper shell script that Terminal.app will source
     cat > "$macos_dir/run.sh" <<EOF
 #!/usr/bin/env bash
-export PATH="/opt/homebrew/bin:/usr/local/bin:\$HOME/.fly/bin:\$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:\$HOME/.local/bin:\$HOME/.fly/bin:\$PATH"
 export FLY_NO_UPDATE_CHECK=1
 export HOMEBREW_NO_AUTO_UPDATE=1
-cd "$REPO_DIR"
-[ -f .env ] && { set -a; . .env; set +a; }
-exec "$FLY_VPN_BIN"
+exec fly-vpn
 EOF
     chmod +x "$macos_dir/run.sh"
 
@@ -305,7 +318,7 @@ install_linux() {
 Type=Application
 Name=${APP_NAME}
 Comment=Ephemeral Tailscale exit-node launcher on Fly.io
-Exec=bash -c 'cd ${REPO_DIR} && if [ -f .env ]; then set -a; . .env; set +a; fi; exec ${FLY_VPN_BIN}'
+Exec=bash -c 'export PATH="$HOME/.local/bin:$PATH"; exec ${FLY_VPN_BIN}'
 Terminal=true
 Categories=Network;VPN;Utility;
 Keywords=vpn;tailscale;fly;exit-node;
@@ -343,8 +356,6 @@ install_watchdog_macos() {
         <string>${FLY_VPN_BIN}</string>
         <string>--watchdog</string>
     </array>
-    <key>WorkingDirectory</key>
-    <string>${REPO_DIR}</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -355,7 +366,7 @@ install_watchdog_macos() {
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>12</integer>
+        <integer>0</integer>
         <key>Minute</key>
         <integer>0</integer>
     </dict>
@@ -369,16 +380,16 @@ PLIST
 
     launchctl unload "$plist" 2>/dev/null || true
     launchctl load "$plist"
-    ok "Watchdog scheduled (daily 12:00) via launchd"
+    ok "Watchdog scheduled (daily at midnight) via launchd"
 }
 
 install_watchdog_linux() {
-    local cron_cmd="0 12 * * * cd $REPO_DIR && $FLY_VPN_BIN --watchdog >> /tmp/fly-vpn-watchdog.log 2>&1"
+    local cron_cmd="0 0 * * * $FLY_VPN_BIN --watchdog >> /tmp/fly-vpn-watchdog.log 2>&1"
     local cron_marker="# fly-vpn-watchdog"
 
     # Remove old entry if present, then add
     ( crontab -l 2>/dev/null | grep -v "$cron_marker" ; echo "$cron_cmd $cron_marker" ) | crontab -
-    ok "Watchdog scheduled (daily 12:00) via crontab"
+    ok "Watchdog scheduled (daily at midnight) via crontab"
 }
 
 uninstall_watchdog_macos() {
@@ -401,7 +412,7 @@ uninstall_watchdog_linux() {
 prompt_watchdog() {
     echo ""
     info "Optional: daily watchdog to auto-destroy orphaned Fly apps."
-    echo -e "  Runs at ${BOLD}12:00${NC} daily — checks if a fly-vpn-node app was left"
+    echo -e "  Runs at ${BOLD}midnight${NC} daily — checks if a fly-vpn-node app was left"
     echo -e "  running and destroys it to ${BOLD}prevent charges${NC}."
     echo ""
     read -rp "  Enable watchdog? [y/N]: " wd_answer
@@ -426,6 +437,7 @@ uninstall_macos() {
         info "Nothing to remove — $app_dir does not exist."
     fi
     uninstall_watchdog_macos
+    uv tool uninstall fly-vpn 2>/dev/null && ok "Removed fly-vpn tool install" || true
 }
 
 uninstall_linux() {
@@ -440,6 +452,7 @@ uninstall_linux() {
         info "Nothing to remove — desktop entry does not exist."
     fi
     uninstall_watchdog_linux
+    uv tool uninstall fly-vpn 2>/dev/null && ok "Removed fly-vpn tool install" || true
 }
 
 # ── main ────────────────────────────────────────────────────

@@ -77,9 +77,7 @@ def test_waits_for_name_release_before_creating():
 
 def test_fails_after_max_retries():
     """10 consecutive 'already taken' failures → FAILED."""
-    client = _make_client(
-        create_results=[(False, "Name has already been taken")] * 10
-    )
+    client = _make_client(create_results=[(False, "Name has already been taken")] * 10)
     with (
         patch("flyexit.fly_api.get_client", return_value=client),
         patch("flyexit.fly_ops.time.sleep"),
@@ -97,9 +95,7 @@ def test_fails_after_max_retries():
 
 def test_returns_failed_on_non_transient_error():
     """A non-'taken' error (e.g. billing) fails on the first attempt, no retry."""
-    client = _make_client(
-        create_results=[(False, "requires a credit card")]
-    )
+    client = _make_client(create_results=[(False, "requires a credit card")])
     with (
         patch("flyexit.fly_api.get_client", return_value=client),
         patch("flyexit.fly_ops.time.sleep") as mock_sleep,

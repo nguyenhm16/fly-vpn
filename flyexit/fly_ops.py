@@ -42,8 +42,7 @@ def check_auth() -> tuple[AuthStatus, str]:
     if client is None:
         return (
             AuthStatus.NOT_AUTHENTICATED,
-            "No Fly.io API token found."
-            " Press [bold]c[/] to open Settings and add one.",
+            "No Fly.io API token found. Press [bold]c[/] to open Settings and add one.",
         )
     ok, username = client.check_auth()
     client.close()
@@ -89,8 +88,7 @@ def ensure_app_exists(app_name: str, org: str) -> tuple[AppStatus, str]:
     if client is None:
         return (
             AppStatus.FAILED,
-            "No Fly.io API token found."
-            " Press [bold]c[/] to open Settings and add one.",
+            "No Fly.io API token found. Press [bold]c[/] to open Settings and add one.",
         )
 
     # Unconditional cleanup — no-op when the app is absent; also releases

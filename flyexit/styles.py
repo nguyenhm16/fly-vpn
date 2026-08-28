@@ -42,7 +42,7 @@ Screen {
     margin-top: 1;
 }
 
-#btn-update {
+#btn-refresh {
     margin-top: 1;
     width: auto;
     min-width: 12;
@@ -52,12 +52,12 @@ Screen {
     color: $text-muted;
 }
 
-#btn-update:hover {
+#btn-refresh:hover {
     color: $text;
     background: $panel-lighten-2;
 }
 
-#update-row {
+#refresh-row {
     height: auto;
     align: right middle;
 }
