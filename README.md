@@ -378,7 +378,7 @@ Reach the TUI from a browser instead of a terminal:
 uv run fly-vpn --web --port 8080   # --port optional, defaults to the configured web_port (8000)
 ```
 
-Open `http://localhost:8080` — this serves the exact same Textual UI over a websocket (via [textual-serve](https://github.com/Textualize/textual-serve)), just rendered in the browser instead of your terminal.
+Open `http://localhost:8080` — this serves the exact same Textual UI over a websocket (via [textual-serve](https://github.com/Textualize/textual-serve)), just rendered in the browser instead of your terminal. On macOS, Safari's **Add to Dock** turns that page into a standalone window — quitting the app inside it (`q`) closes that window outright instead of leaving a "Session ended" screen behind (falls back to that screen if the browser blocks scripted window closes, e.g. an ordinary tab).
 
 To run it unattended in the background on macOS, managed by `launchd` (starts at login, restarts on crash):
 
