@@ -12,10 +12,11 @@ from flyexit.constants import (
     DEFAULT_ORG,
     DEFAULT_REGION,
     DEFAULT_VM_MEMORY,
+    DEFAULT_WEB_PORT,
 )
 from flyexit.fly_ops import app_exists
 from flyexit.session import ConnectStatus, LaunchStatus, PreflightStatus
-from flyexit.tailscale import disconnect_exit_node
+from flyexit.tailscale import disconnect_exit_node, is_exit_node_active
 
 
 def _build_session():
@@ -102,6 +103,40 @@ def run_start() -> None:
         )
 
     print("Run 'fly-vpn --stop' to disconnect and clean up.")
+
+
+def run_status() -> None:
+    """Print current configuration and session status. Changes nothing."""
+    cfg = config.load()
+    app_name = cfg.get("app_name", DEFAULT_APP_NAME)
+    session = _build_session()
+
+    from flyexit.fly_api import resolve_token
+
+    print("Fly VPN — status")
+    print()
+    print("Configuration:")
+    print(f"  App name:  {app_name}")
+    print(f"  Region:    {cfg.get('region', DEFAULT_REGION)}")
+    print(f"  Memory:    {cfg.get('vm_memory', DEFAULT_VM_MEMORY)} MB")
+    print(f"  Org:       {cfg.get('org', DEFAULT_ORG)}")
+    print(f"  Web port:  {cfg.get('web_port', DEFAULT_WEB_PORT)}")
+    print()
+    print("Credentials:")
+    print(f"  Fly.io API token:  {'configured' if resolve_token() else 'missing'}")
+    print(f"  Tailscale auth:    {'configured' if session.has_auth else 'missing'}")
+    print()
+
+    running = app_exists(app_name)
+    connected = is_exit_node_active()
+    print("Session:")
+    print(f"  Fly app running:      {'yes' if running else 'no'}")
+    print(f"  Tailscale exit node:  {'connected' if connected else 'not connected'}")
+    if running and not connected:
+        print(
+            "    (app running but not routed — try:"
+            " tailscale set --exit-node=fly-vpn-exit)"
+        )
 
 
 def run_stop() -> None:

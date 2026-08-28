@@ -14,6 +14,7 @@ Usage:
   fly-vpn                            Launch the interactive terminal UI (default)
   fly-vpn --start                    Launch a session headlessly (no UI)
   fly-vpn --stop                     Tear down the current session
+  fly-vpn --status                   Print current status/configuration
   fly-vpn --web [--port N]           Serve the TUI in a browser (default port 8000)
   fly-vpn --daemon-install [--port N]
                                       Install a launchd background daemon serving --web
@@ -69,6 +70,12 @@ def main() -> None:
         from flyexit.headless import run_stop
 
         run_stop()
+        return
+
+    if "--status" in sys.argv:
+        from flyexit.headless import run_status
+
+        run_status()
         return
 
     if "--web" in sys.argv:

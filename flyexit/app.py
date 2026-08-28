@@ -88,6 +88,7 @@ class FlyVPNApp(App[None]):
         self._launching = False
         self._stopping = False
         self._quitting = False
+        self._refreshing = False
         self._session_detection_ran = False
 
         atexit.register(self._session.emergency_cleanup)
@@ -119,38 +120,80 @@ class FlyVPNApp(App[None]):
                 "Set [bold]TAILSCALE_API_KEY[/] or [bold]TAILSCALE_AUTHKEY[/]"
                 " in Settings ([bold]c[/]) or your .env file."
             )
-            self.query_one("#btn-launch", Button).disabled = True
 
-        self._detect_running_session()
+        self._refresh_session_state()
+
+    @on(Button.Pressed, "#btn-refresh")
+    def _handle_refresh(self) -> None:
+        if self._launching or self._stopping or self._refreshing:
+            return
+        self._log("[dim]🔄 Refreshing…[/]")
+        self._refresh_session_state(manual=True)
 
     @work(thread=True)
-    def _detect_running_session(self) -> None:
-        """Reflect a session already running from elsewhere (`--start`,
-        another TUI/browser front-end) instead of assuming nothing is
-        active just because this process's VPNSession was freshly built —
-        otherwise Launch would destroy-and-recreate the running app."""
+    def _refresh_session_state(self, *, manual: bool = False) -> None:
+        """Sync this front-end's view with the real Fly app state.
+
+        Every front-end (terminal TUI, each --web/--daemon browser
+        connection, `--start`/`--stop`) is a separate process with no
+        shared in-memory state — this is the only way one of them learns
+        what another did. Runs automatically on startup (also gating
+        Launch until it completes — otherwise a click landing before this
+        finishes could launch concurrently with a session started
+        elsewhere, corrupting both) and on demand via the Refresh button.
+        """
         from flyexit.fly_ops import app_exists
 
+        self._refreshing = True
         app_name = self._cfg.get("app_name", DEFAULT_APP_NAME)
         try:
             running = app_exists(app_name)
         except Exception:  # noqa: BLE001
-            running = False
+            self._refreshing = False
+            if manual:
+                self.call_from_thread(
+                    self._log, "[bold red]⚠  Couldn't reach Fly.io API to refresh.[/]"
+                )
+            return
         finally:
             self._session_detection_ran = True
+            self._refreshing = False
 
-        if not running:
+        was_active = self._session.is_active
+
+        if running and not was_active:
+            self._session.attach(app_name)
+            self.call_from_thread(
+                self._log,
+                f"[dim]🔎 Detected an already-running session"
+                f" ([bold]{app_name}[/bold])[/]",
+            )
+            self.call_from_thread(self._set_buttons, launching=True)
+            self.call_from_thread(
+                self._set_status, "🟢 Session already running — press Stop to end"
+            )
             return
 
-        self._session.attach(app_name)
-        self.call_from_thread(
-            self._log,
-            f"[dim]🔎 Detected an already-running session ([bold]{app_name}[/bold])[/]",
-        )
-        self.call_from_thread(self._set_buttons, launching=True)
-        self.call_from_thread(
-            self._set_status, "🟢 Session already running — press Stop to end"
-        )
+        if not running and was_active:
+            self._session.detach()
+            self.call_from_thread(
+                self._log, "[dim]🔌 Session ended elsewhere — no longer running.[/]"
+            )
+            self.call_from_thread(self._set_buttons, launching=False)
+            self.call_from_thread(self._set_status, "Ready")
+            return
+
+        if manual:
+            state = "still running" if running else "still nothing running"
+            self.call_from_thread(self._log, f"[dim]✔ Refreshed — {state}.[/]")
+
+        if not running and self._session.has_auth:
+            # Confirmed nothing is running — safe to allow Launch now.
+            self.call_from_thread(
+                lambda: setattr(
+                    self.query_one("#btn-launch", Button), "disabled", False
+                )
+            )
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -172,12 +215,18 @@ class FlyVPNApp(App[None]):
                             "🚀 Launch",
                             variant="success",
                             id="btn-launch",
+                            disabled=True,  # enabled once startup check clears
                         )
                         yield Button(
                             "🛑 Stop",
                             variant="error",
                             id="btn-stop",
                             disabled=True,
+                        )
+                        yield Button(
+                            "🔄 Refresh",
+                            variant="default",
+                            id="btn-refresh",
                         )
                 with Vertical(id="stats-col"):
                     yield Static("", id="stats-text")

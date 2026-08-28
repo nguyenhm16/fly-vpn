@@ -119,3 +119,38 @@ def test_run_stop_exits_on_teardown_failure(monkeypatch):
 
     with pytest.raises(SystemExit):
         headless.run_stop()
+
+
+def test_run_status_running_and_configured(monkeypatch, capsys):
+    from flyexit import fly_api
+
+    monkeypatch.setattr(headless, "app_exists", lambda _name: True)
+    monkeypatch.setattr(headless, "is_exit_node_active", lambda: True)
+    monkeypatch.setattr(fly_api, "resolve_token", lambda: "fly_v1_test")
+    monkeypatch.setattr(headless, "_build_session", lambda: MagicMock(has_auth=True))
+
+    headless.run_status()
+
+    out = capsys.readouterr().out
+    assert "fly-vpn-node-abc123" in out
+    assert "Fly.io API token:  configured" in out
+    assert "Tailscale auth:    configured" in out
+    assert "Fly app running:      yes" in out
+    assert "Tailscale exit node:  connected" in out
+
+
+def test_run_status_idle_and_unconfigured(monkeypatch, capsys):
+    from flyexit import fly_api
+
+    monkeypatch.setattr(headless, "app_exists", lambda _name: False)
+    monkeypatch.setattr(headless, "is_exit_node_active", lambda: False)
+    monkeypatch.setattr(fly_api, "resolve_token", lambda: None)
+    monkeypatch.setattr(headless, "_build_session", lambda: MagicMock(has_auth=False))
+
+    headless.run_status()
+
+    out = capsys.readouterr().out
+    assert "Fly.io API token:  missing" in out
+    assert "Tailscale auth:    missing" in out
+    assert "Fly app running:      no" in out
+    assert "Tailscale exit node:  not connected" in out

@@ -325,17 +325,20 @@ python main.py
 | `t` | Toggle dark/light theme |
 | `q` | Quit |
 
+Each terminal window and browser tab (`--web`/`--daemon-install`) runs its own independent front-end with no shared in-memory state — a **🔄 Refresh** button next to Launch/Stop re-checks the real Fly.io state on demand, so a tab that's gone stale (e.g. the session was started or stopped from `--start`/`--stop`/another tab) can catch up without reopening it. This also runs automatically once at startup, which is why Launch stays disabled for a moment after opening — it's confirming nothing is already running before allowing a new one.
+
 ### Headless CLI mode
 
-Launch or tear down a session without opening the TUI, e.g. for scripting:
+Launch, tear down, or inspect a session without opening the TUI, e.g. for scripting:
 
 ```bash
-fly-vpn --start   # launch and connect, using saved region/memory settings
-fly-vpn --stop    # disconnect and destroy the exit node
-fly-vpn --help    # list all CLI flags
+fly-vpn --start    # launch and connect, using saved region/memory settings
+fly-vpn --stop     # disconnect and destroy the exit node
+fly-vpn --status   # print current configuration and whether a session is running
+fly-vpn --help     # list all CLI flags
 ```
 
-`--start` blocks until connected (or failed) and exits — the exit node keeps running independently after that. `--stop` always targets this install's app, so it works even from a separate invocation with no in-memory session state.
+`--start` blocks until connected (or failed) and exits — the exit node keeps running independently after that. `--stop`/`--status` always target this install's app directly, so they work correctly even from a separate invocation with no in-memory session state.
 
 ---
 

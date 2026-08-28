@@ -93,6 +93,10 @@ Sparkline > .sparkline--min-color {
     margin: 0 1;
 }
 
+#btn-refresh {
+    margin: 0 1;
+}
+
 #status-bar {
     height: 1;
     margin: 0 0 1 0;

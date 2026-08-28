@@ -153,6 +153,13 @@ class VPNSession:
         """
         self.app_name = app_name
 
+    def detach(self) -> None:
+        """Clear this instance's association with a session, without
+        touching remote state — used when a state refresh shows the
+        session ended elsewhere (stopped via another front-end)."""
+        self.app_name = None
+        self._owns_app = False
+
     def _start_usage_log(self, region: str, memory_mb: int = 256) -> None:
         try:
             from flyexit.usage_db import log_start
