@@ -366,7 +366,7 @@ python main.py --watchdog
 
 It checks for orphaned app resources and destroys them to prevent charges.
 
-Tip: great as a daily cron safety net. The installer will offer to set this up automatically.
+Tip: great as a daily cron safety net. The installer will offer to schedule this automatically, running once a day at **midnight** (`launchd` on macOS, `crontab` on Linux) — so a session left connected overnight gets caught as early as possible, rather than sitting exposed all night until some other time of day.
 
 ---
 

@@ -366,7 +366,7 @@ install_watchdog_macos() {
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
-        <integer>12</integer>
+        <integer>0</integer>
         <key>Minute</key>
         <integer>0</integer>
     </dict>
@@ -380,16 +380,16 @@ PLIST
 
     launchctl unload "$plist" 2>/dev/null || true
     launchctl load "$plist"
-    ok "Watchdog scheduled (daily 12:00) via launchd"
+    ok "Watchdog scheduled (daily at midnight) via launchd"
 }
 
 install_watchdog_linux() {
-    local cron_cmd="0 12 * * * $FLY_VPN_BIN --watchdog >> /tmp/fly-vpn-watchdog.log 2>&1"
+    local cron_cmd="0 0 * * * $FLY_VPN_BIN --watchdog >> /tmp/fly-vpn-watchdog.log 2>&1"
     local cron_marker="# fly-vpn-watchdog"
 
     # Remove old entry if present, then add
     ( crontab -l 2>/dev/null | grep -v "$cron_marker" ; echo "$cron_cmd $cron_marker" ) | crontab -
-    ok "Watchdog scheduled (daily 12:00) via crontab"
+    ok "Watchdog scheduled (daily at midnight) via crontab"
 }
 
 uninstall_watchdog_macos() {
@@ -412,7 +412,7 @@ uninstall_watchdog_linux() {
 prompt_watchdog() {
     echo ""
     info "Optional: daily watchdog to auto-destroy orphaned Fly apps."
-    echo -e "  Runs at ${BOLD}12:00${NC} daily — checks if a fly-vpn-node app was left"
+    echo -e "  Runs at ${BOLD}midnight${NC} daily — checks if a fly-vpn-node app was left"
     echo -e "  running and destroys it to ${BOLD}prevent charges${NC}."
     echo ""
     read -rp "  Enable watchdog? [y/N]: " wd_answer
