@@ -26,14 +26,45 @@ Usage:
 """
 
 
+_KNOWN_FLAGS = {
+    "--help",
+    "-h",
+    "--watchdog",
+    "--setup-acl",
+    "--stats",
+    "--start",
+    "--stop",
+    "--status",
+    "--web",
+    "--daemon-install",
+    "--daemon-uninstall",
+    "--port",
+}
+
+
 def _port_from_argv() -> int | None:
     if "--port" in sys.argv:
         return int(sys.argv[sys.argv.index("--port") + 1])
     return None
 
 
+def _check_known_flags() -> None:
+    """Reject unrecognized flags instead of silently launching the TUI."""
+    args = iter(sys.argv[1:])
+    for arg in args:
+        if arg == "--port":
+            next(args, None)  # its value, not a flag
+            continue
+        if arg not in _KNOWN_FLAGS:
+            print(f"Unknown option: {arg}", file=sys.stderr)
+            print("Run 'fly-vpn --help' for usage.", file=sys.stderr)
+            sys.exit(1)
+
+
 def main() -> None:
     """Entry-point for the CLI."""
+
+    _check_known_flags()
 
     if "--help" in sys.argv or "-h" in sys.argv:
         print(_USAGE, end="")
