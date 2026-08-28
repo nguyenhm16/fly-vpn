@@ -7,6 +7,23 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+_USAGE = """\
+fly-vpn — ephemeral Tailscale exit node on Fly.io
+
+Usage:
+  fly-vpn                            Launch the interactive terminal UI (default)
+  fly-vpn --start                    Launch a session headlessly (no UI)
+  fly-vpn --stop                     Tear down the current session
+  fly-vpn --web [--port N]           Serve the TUI in a browser (default port 8000)
+  fly-vpn --daemon-install [--port N]
+                                      Install a launchd background daemon serving --web
+  fly-vpn --daemon-uninstall         Remove the launchd background daemon
+  fly-vpn --watchdog                 Headless orphaned-app cleanup (for cron/launchd)
+  fly-vpn --setup-acl                Idempotent Tailscale ACL setup
+  fly-vpn --stats                    Print session history from SQLite
+  fly-vpn --help, -h                 Show this help
+"""
+
 
 def _port_from_argv() -> int | None:
     if "--port" in sys.argv:
@@ -16,6 +33,10 @@ def _port_from_argv() -> int | None:
 
 def main() -> None:
     """Entry-point for the CLI."""
+
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print(_USAGE, end="")
+        return
 
     load_dotenv(Path.home() / ".fly_vpn.env")
     load_dotenv()  # back-compat: repo-local .env for existing dev checkouts
@@ -36,6 +57,18 @@ def main() -> None:
         from flyexit.usage_db import print_stats
 
         print_stats()
+        return
+
+    if "--start" in sys.argv:
+        from flyexit.headless import run_start
+
+        run_start()
+        return
+
+    if "--stop" in sys.argv:
+        from flyexit.headless import run_stop
+
+        run_stop()
         return
 
     if "--web" in sys.argv:

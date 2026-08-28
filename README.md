@@ -325,6 +325,18 @@ python main.py
 | `t` | Toggle dark/light theme |
 | `q` | Quit |
 
+### Headless CLI mode
+
+Launch or tear down a session without opening the TUI, e.g. for scripting:
+
+```bash
+fly-vpn --start   # launch and connect, using saved region/memory settings
+fly-vpn --stop    # disconnect and destroy the exit node
+fly-vpn --help    # list all CLI flags
+```
+
+`--start` blocks until connected (or failed) and exits — the exit node keeps running independently after that. `--stop` always targets this install's app, so it works even from a separate invocation with no in-memory session state.
+
 ---
 
 ## Safety model
@@ -389,9 +401,12 @@ Logs go to `~/Library/Logs/fly-vpn-daemon.log`. This is purely additive — `uv 
 
 ```
 flyexit/
+├── cli.py            # CLI dispatch (app / start / stop / watchdog / setup-acl / web / daemon)
+├── __main__.py       # `python -m flyexit` entry point
 ├── app.py            # UI layer (Textual only)
 ├── settings_screen.py # Credential management UI
 ├── session.py        # business orchestration (preflight/launch/connect/teardown)
+├── headless.py        # --start/--stop: session control without the TUI
 ├── fly_api.py        # Direct Machines REST API client (httpx)
 ├── fly_ops.py        # Fly.io orchestration (using fly_api)
 ├── db.py             # Unified SQLite connection & migrations
@@ -407,7 +422,7 @@ flyexit/
 ├── webserver.py      # serves the TUI over HTTP (--web)
 └── daemon.py         # launchd lifecycle management (--daemon-install/-uninstall)
 
-main.py            # entry-point (app / watchdog / setup-acl / web / daemon)
+main.py            # dev-checkout shim → flyexit.cli:main
 install.sh         # installer/uninstaller
 ```
 
