@@ -87,9 +87,9 @@
         display: none;
       }
 
-      /* Only shown as a fallback — see the auto-close script below. Most
-         windows (a Safari "Add to Dock" web app, or any window closable
-         by script) never reach this state; the tab just closes. */
+      /* Shown once the auto-close attempt below gives up — in practice
+         this is what always happens, since browsers refuse to let script
+         close a window it didn't open itself (window.opener unset). */
       body.-closed-fallback .closed-dialog {
         opacity: 1;
         display: flex;
@@ -123,12 +123,13 @@
 
       // fly-vpn: when the app quits (e.g. pressing 'q'), textual.js adds
       // the "-closed" class to <body> on websocket close. Try to close
-      // this window outright — this is what makes quitting the app from
-      // inside a Safari "Add to Dock" web app actually quit that app,
-      // instead of leaving it sitting on a dead "Session ended" screen.
-      // window.close() is a silent no-op on a window script didn't open
-      // (most ordinary browser tabs), so fall back to the original
-      // restart dialog if the window is still around shortly after.
+      // this window outright. In practice this never actually succeeds —
+      // window.close() is refused by the browser for any window it
+      // didn't open itself via script (window.opener unset), which is
+      // true of a normal tab *and* a Safari "Add to Dock" window alike —
+      // but it's a harmless no-op attempt, so it stays in case some
+      // context ever does allow it. The fallback message tells the user
+      // to close the window themselves, since script can't do it here.
       document.addEventListener("DOMContentLoaded", () => {
         const observer = new MutationObserver(() => {
           if (document.body.classList.contains("-closed")) {
@@ -171,8 +172,7 @@
     <div class="dialog-container closed-dialog">
       <div class="shade"></div>
       <div class="intro">
-        <div class="message">Session ended.</div>
-        <button type="button" onClick="refresh()">Restart</button>
+        <div class="message">Fly VPN quit.<br />Close this window with &#8984;W.</div>
       </div>
     </div>
 
